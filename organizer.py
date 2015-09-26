@@ -5,10 +5,13 @@ import shutil
 
 from PIL import Image
 from datetime import datetime
+from video_dater import VideoDater
+from video_dater import VideoFormatError
 
 class Organizer(object):
 
   EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif']
+  VIDEO_EXTENSIONS = ['.mp4', '.mov']
   DATE_TAKEN_ID = 36867
   DATE_TAKEN_FMT = "%Y:%m:%d %H:%M:%S"
   UNKNOWN_FOLDER = "unknown_date_taken"
@@ -45,7 +48,7 @@ class Organizer(object):
 
     for current_file in files:
       full_path = folder + "/" + current_file
-      if os.path.isfile(full_path) and self._has_valid_extension(full_path):
+      if os.path.isfile(full_path):
         date_taken = self._try_get_date_taken(full_path)
         if date_taken is None:
           self.UNKNOWN_DATE_TIME_FILES.append(full_path)
@@ -58,9 +61,16 @@ class Organizer(object):
         if self.RECURSIVE and os.path.isdir(full_path):
           self.traverse_folder(full_path)
 
-  def _has_valid_extension(self, full_path):
+  def _has_valid_photo_extension(self, full_path):
     filename, file_extension = os.path.splitext(full_path)
     if file_extension.lower() in self.EXTENSIONS:
+      return True
+    else:
+      return False
+
+  def _has_valid_video_extension(self, full_path):
+    filename, file_extension = os.path.splitext(full_path)
+    if file_extension.lower() in self.VIDEO_EXTENSIONS:
       return True
     else:
       return False
@@ -68,8 +78,11 @@ class Organizer(object):
   def _try_get_date_taken(self, full_path):
     date_taken = None
     try:
-      date_taken = self._get_date_taken_from_exif_data(full_path)
-    except AttributeError, e:
+      if self._has_valid_photo_extension(full_path):
+        date_taken = self._get_date_taken_from_exif_data(full_path)
+      elif self._has_valid_video_extension(full_path):
+        date_taken = self._get_date_taken_from_video_data(full_path)
+    except (AttributeError, VideoFormatError) as e:
       print "Error procesando %s\n" % full_path
       print "e = %s\n" % e
 
@@ -122,6 +135,15 @@ class Organizer(object):
     for src in self.UNKNOWN_DATE_TIME_FILES:
         dst = self.OUTPUT_UNKNOWN_FOLDER + "/" + os.path.basename(src)
         self._handle_file(src, dst)
+
+
+  def _get_date_taken_from_video_data(self, full_path):
+    video_dater = VideoDater(full_path)
+    date_taken = video_dater.creation_date
+    if date_taken.year > 2000:
+      return date_taken
+    else:
+     return None
 
   def debug(self, msg):
     if self.VERBOSE:
